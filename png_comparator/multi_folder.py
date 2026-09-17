@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,9 +20,9 @@ from .utils import wildcard_text_match
 class MultiFolderCamTab(OneShotCamTab):
     """Visionneuse one-shot avec identité explicite dossier + fichier.
 
-    Le nom du dossier est affiché à l'utilisateur pour distinguer immédiatement
-    deux PNG portant le même nom. Le chemin complet reste la clé technique afin
-    d'éviter toute collision, même si deux dossiers portent eux-mêmes le même nom.
+    Le chemin complet reste la clé technique. L'affichage du dossier utilise le
+    chemin relatif au tronc commun des résultats afin de rester lisible tout en
+    distinguant deux dossiers terminant par le même nom (ex. plusieurs IMG).
     """
 
     COL_REF = 0
@@ -31,13 +32,15 @@ class MultiFolderCamTab(OneShotCamTab):
     MULTI_FOLDER_HEADERS = ["Réf", "Dossier", "Fichier", "Tags"]
 
     def __init__(self, *args, **kwargs) -> None:
+        self._folder_common_root = ""
         super().__init__(*args, **kwargs)
+        self._folder_common_root = self._compute_folder_common_root()
 
         self.column_filter_folder_edit = QLineEdit(self)
         self.column_filter_folder_edit.setPlaceholderText("Filtre Dossier")
         self.column_filter_folder_edit.setClearButtonEnabled(True)
         self.column_filter_folder_edit.setMinimumWidth(90)
-        self.column_filter_folder_edit.setToolTip("Filtre le nom ou le chemin du dossier. * fonctionne comme joker.")
+        self.column_filter_folder_edit.setToolTip("Filtre le dossier relatif, son nom ou son chemin complet. * fonctionne comme joker.")
         self.column_filter_folder_edit.hide()
         self.column_filter_folder_edit.textChanged.connect(self.apply_filter)
 
@@ -91,9 +94,32 @@ class MultiFolderCamTab(OneShotCamTab):
         path = str(getattr(record, "path", "") or "").strip()
         return str(Path(path).parent) if path else ""
 
+    def _compute_folder_common_root(self) -> str:
+        folders = [self.folder_path(record) for record in getattr(self, "all_records", [])]
+        folders = [folder for folder in folders if folder]
+        if not folders:
+            return ""
+        try:
+            common = os.path.commonpath(folders)
+        except (ValueError, OSError):
+            return ""
+        return str(common)
+
+    def folder_label(self, record) -> str:
+        full = self.folder_path(record)
+        if not full:
+            return ""
+        root = str(getattr(self, "_folder_common_root", "") or "")
+        if root:
+            try:
+                relative = os.path.relpath(full, root)
+                if relative not in {"", "."}:
+                    return relative
+            except (ValueError, OSError):
+                pass
+        return Path(full).name or full
+
     def _column_filter_edits(self):
-        # Pendant l'initialisation de OneShotCamTab, le filtre dossier n'existe
-        # pas encore. On laisse alors le parent finir son initialisation.
         if not hasattr(self, "column_filter_folder_edit"):
             return [self.column_filter_ref_edit, self.column_filter_file_edit, self.column_filter_tags_edit]
         return [
@@ -121,14 +147,14 @@ class MultiFolderCamTab(OneShotCamTab):
         self.records = [
             record for record in self.all_records
             if matches(col_ref, record.ref)
-            and matches(col_folder, self.folder_name(record), self.folder_path(record))
+            and matches(col_folder, self.folder_label(record), self.folder_name(record), self.folder_path(record))
             and matches(col_file, record.file_name, record.stem, record.path)
             and matches(col_tags, " ".join(record.tags))
         ]
         self.records.sort(
             key=lambda record: (
                 record.ref.lower(),
-                self.folder_name(record).lower(),
+                self.folder_label(record).lower(),
                 record.file_name.lower(),
                 record.path.lower(),
             )
@@ -164,7 +190,7 @@ class MultiFolderCamTab(OneShotCamTab):
             self.table.setRowCount(len(self.records))
 
             for row, record in enumerate(self.records):
-                folder_name = self.folder_name(record)
+                folder_label = self.folder_label(record)
                 folder_path = self.folder_path(record)
 
                 ref_item = QTableWidgetItem(record.ref)
@@ -172,7 +198,7 @@ class MultiFolderCamTab(OneShotCamTab):
                 ref_item.setFlags(ref_item.flags() & ~Qt.ItemIsEditable)
                 self.table.setItem(row, self.COL_REF, ref_item)
 
-                folder_item = QTableWidgetItem(folder_name)
+                folder_item = QTableWidgetItem(folder_label)
                 folder_item.setData(Qt.UserRole, record.path)
                 folder_item.setData(Qt.UserRole + 1, folder_path)
                 folder_item.setToolTip(folder_path)
@@ -198,7 +224,6 @@ class MultiFolderCamTab(OneShotCamTab):
             self.table.viewport().update()
 
     def populate_compare_selector(self) -> None:
-        """Image 2 : affiche explicitement dossier + fichier pour éviter les ambiguïtés."""
         self._updating_compare_selector = True
         table = getattr(self, "compare_ref_table", None)
         if table is not None:
@@ -216,7 +241,7 @@ class MultiFolderCamTab(OneShotCamTab):
                 row = table.rowCount()
                 table.insertRow(row)
 
-                folder_item = QTableWidgetItem(self.folder_name(record))
+                folder_item = QTableWidgetItem(self.folder_label(record))
                 file_item = QTableWidgetItem(record.file_name)
                 for item in (folder_item, file_item):
                     item.setData(Qt.UserRole, index)
@@ -293,7 +318,6 @@ class MultiFolderMainWindow(OneShotMainWindow):
 
 
 def install_multi_folder_mode(app_module) -> None:
-    """Active le mode one-shot puis remplace la liste par la variante multi-dossiers."""
     install_one_shot_mode(app_module)
     app_module.CamTab = MultiFolderCamTab
     app_module.MainWindow = MultiFolderMainWindow

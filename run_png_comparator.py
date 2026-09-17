@@ -34,6 +34,7 @@ from png_comparator.ui.table_delegates import (
     NoWheelComboBox,
     StatusComboDelegate,
 )
+from png_comparator.ui.viewer import CompareImageCanvas
 from png_comparator.utils import (
     canonical_image_key,
     color_to_tuple,
@@ -104,6 +105,7 @@ def install_modular_components() -> None:
     legacy_app.NoWheelComboBox = NoWheelComboBox
     legacy_app.StatusComboDelegate = StatusComboDelegate
     legacy_app.CommentLineEditDelegate = CommentLineEditDelegate
+    legacy_app.CompareImageCanvas = CompareImageCanvas
 
 
 def main() -> int:

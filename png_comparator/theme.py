@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import sys
 
+from PySide6.QtCore import QEvent, QObject
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QStyleFactory, QWidget
 
@@ -145,21 +146,9 @@ def build_dark_palette() -> QPalette:
     return palette
 
 
-def apply_application_dark_theme(app: QApplication) -> None:
-    """Force un rendu sombre Qt indépendamment du thème de l'OS."""
-    if "Fusion" in QStyleFactory.keys():
-        app.setStyle("Fusion")
-    app.setPalette(build_dark_palette())
-    app.setStyleSheet(DARK_STYLESHEET)
-
-
 def apply_windows_dark_titlebar(widget: QWidget) -> None:
-    """Force la barre de titre Windows sombre quand DWM le permet.
-
-    Windows 10/11 utilisent selon la build l'attribut 19 ou 20.
-    En dehors de Windows, la fonction est volontairement sans effet.
-    """
-    if not sys.platform.startswith("win"):
+    """Force la barre de titre Windows sombre quand DWM le permet."""
+    if not sys.platform.startswith("win") or not widget.isWindow():
         return
     try:
         hwnd = int(widget.winId())
@@ -190,3 +179,26 @@ def apply_windows_dark_titlebar(widget: QWidget) -> None:
                 pass
     except Exception:
         pass
+
+
+class _DarkWindowEventFilter(QObject):
+    """Applique automatiquement le chrome sombre à chaque fenêtre/dialogue natif."""
+
+    def eventFilter(self, watched, event) -> bool:  # type: ignore[override]
+        if event.type() in (QEvent.Show, QEvent.WinIdChange) and isinstance(watched, QWidget):
+            if watched.isWindow():
+                apply_windows_dark_titlebar(watched)
+        return False
+
+
+def apply_application_dark_theme(app: QApplication) -> None:
+    """Force le rendu sombre Qt et le chrome Windows indépendamment de l'OS."""
+    if "Fusion" in QStyleFactory.keys():
+        app.setStyle("Fusion")
+    app.setPalette(build_dark_palette())
+    app.setStyleSheet(DARK_STYLESHEET)
+
+    # Conserver une référence sur QApplication empêche la destruction du filtre.
+    event_filter = _DarkWindowEventFilter(app)
+    app.installEventFilter(event_filter)
+    app._png_comparator_dark_event_filter = event_filter  # type: ignore[attr-defined]

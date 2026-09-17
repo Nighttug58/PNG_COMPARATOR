@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QLabel, QTableWidg
 
 import png_comparator_v3_01_alpha_cleanup as legacy
 
+from png_comparator.ui.startup_dialog import StartupDialog as ModularStartupDialog
 from png_comparator.utils import wildcard_text_match
 
 _DISABLED_SHORTCUT_IDS = {
@@ -25,13 +26,32 @@ def one_shot_shortcut_default_preferences() -> dict[str, str]:
     return {str(item["id"]): str(item.get("default", "")) for item in ONE_SHOT_SHORTCUT_DEFINITIONS}
 
 
-class OneShotStartupDialog(legacy.StartupDialog):
+class OneShotStartupDialog(ModularStartupDialog):
     def __init__(self, main_window) -> None:
         super().__init__(main_window)
         if hasattr(self, "btn_load_session"):
             self.btn_load_session.hide()
             self.btn_load_session.setEnabled(False)
         self.setWindowTitle("Démarrage visionneuse")
+
+    def populate_folder_tree(self) -> None:
+        """Évite de relire deux fois la même arborescence au premier affichage.
+
+        Le MainWindow historique force un premier remplissage dans show_start_help(),
+        tandis que StartupDialog programme également un singleShot(0). Une fois la
+        même racine déjà matérialisée dans l'arbre, le second passage devient inutile.
+        """
+        root_text = self.root_path_edit.text().strip().strip('"') if hasattr(self, "root_path_edit") else ""
+        if (
+            root_text
+            and getattr(self, "_folder_tree_root", "") == root_text
+            and hasattr(self, "folder_tree")
+            and self.folder_tree.topLevelItemCount() > 0
+        ):
+            self.refresh_selected_ref_validation()
+            self.refresh_state()
+            return
+        super().populate_folder_tree()
 
 
 class OneShotCamTab(legacy.CamTab):

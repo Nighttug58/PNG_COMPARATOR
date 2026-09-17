@@ -32,7 +32,6 @@ class ImageLoadTask(QRunnable):
         self.setAutoDelete(True)
 
     def _can_emit(self) -> bool:
-        """Retourne False quand l'application est déjà en fermeture."""
         try:
             app = QApplication.instance()
             if app is None or QApplication.closingDown():
@@ -125,12 +124,17 @@ class ImageMemoryCache(QObject):
         self.emit_cache_info()
 
     def clear(self) -> None:
+        """Vide le cache et invalide les workers déjà lancés.
+
+        Les QRunnable ne sont pas interrompus brutalement. Leur clé est toutefois
+        retirée de ``pending`` ; les callbacks tardifs sont donc ignorés dans
+        ``_on_loaded`` / ``_on_failed`` et ne peuvent pas repeupler le cache.
+        """
         self.preview_cache.clear()
         self.pending.clear()
         self.emit_cache_info()
 
     def request(self, path: str) -> None:
-        """Demande le chargement asynchrone d'une preview selon Preview max."""
         if not path:
             return
         key = image_cache_key(path, self.preview_max_side)
@@ -164,6 +168,10 @@ class ImageMemoryCache(QObject):
         original_h: int,
     ) -> None:
         key = image_cache_key(path, preview_max_side)
+        if key not in self.pending:
+            # Worker obsolète : cache vidé ou requête invalidée depuis son départ.
+            self.emit_cache_info()
+            return
         self.pending.discard(key)
 
         if preview_max_side != self.preview_max_side:
@@ -180,6 +188,9 @@ class ImageMemoryCache(QObject):
     @Slot(str, int, str)
     def _on_failed(self, path: str, preview_max_side: int, error: str) -> None:
         key = image_cache_key(path, preview_max_side)
+        if key not in self.pending:
+            self.emit_cache_info()
+            return
         self.pending.discard(key)
         self.image_failed.emit(path, error)
         self.emit_cache_info()

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict
 
-from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtCore import QByteArray, QTimer
 from PySide6.QtGui import QKeySequence
 
 from . import config
@@ -43,6 +42,41 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
     statut, commentaire, scan sauvegardé, sélection de dossiers ni annotations.
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Autosave léger des seules préférences. Il est séparé de l'ancien
+        # autosave projet/session, qui reste désactivé en mode one-shot.
+        self._preferences_save_timer = QTimer(self)
+        self._preferences_save_timer.setSingleShot(True)
+        self._preferences_save_timer.setInterval(900)
+        self._preferences_save_timer.timeout.connect(lambda: self.save_state(silent=True))
+
+        def schedule_save(*_args) -> None:
+            self._preferences_save_timer.start()
+
+        for widget_name, signal_name in (
+            ("root_edit", "textChanged"),
+            ("refs_edit", "textChanged"),
+            ("chk_recursive_refs", "toggled"),
+            ("chk_main_only", "toggled"),
+            ("spin_expected_cams", "valueChanged"),
+            ("spin_preview_max", "valueChanged"),
+            ("spin_preload_radius", "valueChanged"),
+            ("chk_global_preload", "toggled"),
+            ("chk_global_preserve", "toggled"),
+        ):
+            widget = getattr(self, widget_name, None)
+            signal = getattr(widget, signal_name, None) if widget is not None else None
+            if signal is not None:
+                signal.connect(schedule_save)
+
+        # Les placeholders ne doivent contenir aucune référence ou chemin métier.
+        if hasattr(self, "root_edit"):
+            self.root_edit.setPlaceholderText("Choisir un dossier racine...")
+        if hasattr(self, "refs_edit"):
+            self.refs_edit.setPlaceholderText("Une référence par ligne...")
+
     def _preferences_payload(self) -> Dict[str, Any]:
         geometry = ""
         try:
@@ -78,7 +112,6 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
     def load_state(self) -> None:
         data = _read_preferences()
         if not data:
-            # Démarrage propre : aucune valeur métier ne vient du code ou du dossier partagé de l'EXE.
             if hasattr(self, "root_edit"):
                 self.root_edit.setText(config.DEFAULT_SOURCE_ROOT)
             if hasattr(self, "refs_edit"):

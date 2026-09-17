@@ -8,18 +8,18 @@ from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QLabel, QTableWidg
 
 import png_comparator_v3_01_alpha_cleanup as legacy
 
+from png_comparator.shortcuts import SHORTCUT_DEFINITIONS as MODULAR_SHORTCUT_DEFINITIONS
 from png_comparator.ui.startup_dialog import StartupDialog as ModularStartupDialog
 from png_comparator.utils import wildcard_text_match
 
+# Conservé temporairement pour filtrer d'anciens fichiers preferences.json pendant
+# la migration. Ces identifiants ne font plus partie du registre officiel.
 _DISABLED_SHORTCUT_IDS = {
     "save_session", "load_session", "undo_modification", "redo_modification",
     "mark_done_next", "mark_fix_next", "open_drawings", "open_screenshots",
 }
 
-ONE_SHOT_SHORTCUT_DEFINITIONS = [
-    item for item in legacy.SHORTCUT_DEFINITIONS
-    if str(item.get("id", "")) not in _DISABLED_SHORTCUT_IDS
-]
+ONE_SHOT_SHORTCUT_DEFINITIONS = list(MODULAR_SHORTCUT_DEFINITIONS)
 
 
 def one_shot_shortcut_default_preferences() -> dict[str, str]:
@@ -35,12 +35,7 @@ class OneShotStartupDialog(ModularStartupDialog):
         self.setWindowTitle("Démarrage visionneuse")
 
     def populate_folder_tree(self) -> None:
-        """Évite de relire deux fois la même arborescence au premier affichage.
-
-        Le MainWindow historique force un premier remplissage dans show_start_help(),
-        tandis que StartupDialog programme également un singleShot(0). Une fois la
-        même racine déjà matérialisée dans l'arbre, le second passage devient inutile.
-        """
+        """Évite de relire deux fois la même arborescence au premier affichage."""
         root_text = self.root_path_edit.text().strip().strip('"') if hasattr(self, "root_path_edit") else ""
         if (
             root_text

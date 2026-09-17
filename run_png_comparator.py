@@ -29,12 +29,16 @@ from png_comparator.status import (
     status_text_color,
 )
 from png_comparator.ui.color_button import ColorButton
+from png_comparator.ui.drawing_tools import DrawingToolsDialog
+from png_comparator.ui.overlay_nav import OverlayNavButton
+from png_comparator.ui.screenshot_preview import ScreenshotPreviewCanvas
 from png_comparator.ui.table_delegates import (
     CommentLineEditDelegate,
     NoWheelComboBox,
     StatusComboDelegate,
 )
 from png_comparator.ui.viewer import CompareImageCanvas
+from png_comparator.ui.windows import DetachedViewerWindow, WidgetPopupDialog
 from png_comparator.utils import (
     canonical_image_key,
     color_to_tuple,
@@ -106,6 +110,11 @@ def install_modular_components() -> None:
     legacy_app.StatusComboDelegate = StatusComboDelegate
     legacy_app.CommentLineEditDelegate = CommentLineEditDelegate
     legacy_app.CompareImageCanvas = CompareImageCanvas
+    legacy_app.DrawingToolsDialog = DrawingToolsDialog
+    legacy_app.ScreenshotPreviewCanvas = ScreenshotPreviewCanvas
+    legacy_app.OverlayNavButton = OverlayNavButton
+    legacy_app.DetachedViewerWindow = DetachedViewerWindow
+    legacy_app.WidgetPopupDialog = WidgetPopupDialog
 
 
 def main() -> int:

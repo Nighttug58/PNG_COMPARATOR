@@ -28,6 +28,12 @@ from png_comparator.status import (
     normalize_status,
     status_text_color,
 )
+from png_comparator.ui.color_button import ColorButton
+from png_comparator.ui.table_delegates import (
+    CommentLineEditDelegate,
+    NoWheelComboBox,
+    StatusComboDelegate,
+)
 from png_comparator.utils import (
     canonical_image_key,
     color_to_tuple,
@@ -44,13 +50,8 @@ from png_comparator.utils import (
 
 
 def install_modular_components() -> None:
-    """Branche les composants extraits sur l'application historique.
+    """Branche les composants extraits sur l'application historique."""
 
-    Les méthodes des classes historiques résolvent ces symboles dans les globals du
-    module au moment de leur exécution. L'injection a donc lieu avant legacy_app.main().
-    """
-
-    # Configuration / chemins.
     legacy_app.APP_NAME = config.APP_NAME
     legacy_app.CHECKBOX_VISUAL_STYLE = config.CHECKBOX_VISUAL_STYLE
     legacy_app.APP_INSTALL_DIR = config.APP_INSTALL_DIR
@@ -65,7 +66,6 @@ def install_modular_components() -> None:
     legacy_app.DEFAULT_PREVIEW_MAX_SIDE = config.DEFAULT_PREVIEW_MAX_SIDE
     legacy_app.DEFAULT_PRELOAD_RADIUS = config.DEFAULT_PRELOAD_RADIUS
 
-    # Modèles et services cœur.
     legacy_app.ImageRecord = ImageRecord
     legacy_app.Annotation = Annotation
     legacy_app.ViewerState = ViewerState
@@ -75,7 +75,6 @@ def install_modular_components() -> None:
     legacy_app.extract_tags = extract_tags
     legacy_app.ImageMemoryCache = ImageMemoryCache
 
-    # Statuts.
     legacy_app.STATUS_DEFAULT = STATUS_DEFAULT
     legacy_app.STATUS_CHOICES = STATUS_CHOICES
     legacy_app.STATUS_ALIASES = STATUS_ALIASES
@@ -84,13 +83,11 @@ def install_modular_components() -> None:
     legacy_app.status_text_color = status_text_color
     legacy_app.has_annotation_content = has_annotation_content
 
-    # Raccourcis.
     legacy_app.SHORTCUT_DEFINITIONS = SHORTCUT_DEFINITIONS
     legacy_app.SHORTCUT_ALIASES = SHORTCUT_ALIASES
     legacy_app.shortcut_default_preferences = shortcut_default_preferences
     legacy_app.portable_shortcut_text = portable_shortcut_text
 
-    # Utilitaires partagés.
     legacy_app.canonical_image_key = canonical_image_key
     legacy_app.loose_path_basename = loose_path_basename
     legacy_app.image_border_color_for_background = image_border_color_for_background
@@ -102,6 +99,11 @@ def install_modular_components() -> None:
     legacy_app.image_metadata_summary_fast = image_metadata_summary_fast
     legacy_app.open_path_default = open_path_default
     legacy_app.reveal_in_file_manager = reveal_in_file_manager
+
+    legacy_app.ColorButton = ColorButton
+    legacy_app.NoWheelComboBox = NoWheelComboBox
+    legacy_app.StatusComboDelegate = StatusComboDelegate
+    legacy_app.CommentLineEditDelegate = CommentLineEditDelegate
 
 
 def main() -> int:

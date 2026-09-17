@@ -33,6 +33,7 @@ from png_comparator.ui.drawing_tools import DrawingToolsDialog
 from png_comparator.ui.overlay_nav import OverlayNavButton
 from png_comparator.ui.screenshot_library import ScreenshotLibraryDialog
 from png_comparator.ui.screenshot_preview import ScreenshotPreviewCanvas
+from png_comparator.ui.startup_dialog import StartupDialog
 from png_comparator.ui.table_delegates import (
     CommentLineEditDelegate,
     NoWheelComboBox,
@@ -117,6 +118,7 @@ def install_modular_components() -> None:
     legacy_app.OverlayNavButton = OverlayNavButton
     legacy_app.DetachedViewerWindow = DetachedViewerWindow
     legacy_app.WidgetPopupDialog = WidgetPopupDialog
+    legacy_app.StartupDialog = StartupDialog
 
 
 def main() -> int:

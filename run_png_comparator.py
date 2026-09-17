@@ -1,8 +1,7 @@
-"""Point d'entrée transitoire de la version modulaire de PNG Comparator.
+"""Point d'entrée transitoire de la version modulaire one-shot de PNG Comparator.
 
-Pendant le chantier de séparation, l'interface historique reste dans le fichier
-V3.01, tandis que les composants déjà extraits sont injectés avant le démarrage.
-Cela permet de migrer progressivement sans changer le comportement utilisateur.
+L'interface historique reste temporairement disponible comme socle, mais les
+composants déjà extraits et le mode visionneuse pure sont injectés avant démarrage.
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import png_comparator_v3_01_alpha_cleanup as legacy_app
 from png_comparator import config
 from png_comparator.image_cache import ImageMemoryCache
 from png_comparator.models import Annotation, DrawingItem, ImageRecord, ImageScanResult, ViewerState
+from png_comparator.one_shot import install_one_shot_mode
 from png_comparator.scanner import ImageScanner, extract_tags
 from png_comparator.shortcuts import (
     SHORTCUT_ALIASES,
@@ -29,11 +29,7 @@ from png_comparator.status import (
     status_text_color,
 )
 from png_comparator.ui.color_button import ColorButton
-from png_comparator.ui.drawing_tools import DrawingToolsDialog
 from png_comparator.ui.overlay_nav import OverlayNavButton
-from png_comparator.ui.screenshot_library import ScreenshotLibraryDialog
-from png_comparator.ui.screenshot_preview import ScreenshotPreviewCanvas
-from png_comparator.ui.startup_dialog import StartupDialog
 from png_comparator.ui.table_delegates import (
     CommentLineEditDelegate,
     NoWheelComboBox,
@@ -57,7 +53,7 @@ from png_comparator.utils import (
 
 
 def install_modular_components() -> None:
-    """Branche les composants extraits sur l'application historique."""
+    """Branche le noyau modulaire puis active la visionneuse one-shot."""
 
     legacy_app.APP_NAME = config.APP_NAME
     legacy_app.CHECKBOX_VISUAL_STYLE = config.CHECKBOX_VISUAL_STYLE
@@ -112,13 +108,11 @@ def install_modular_components() -> None:
     legacy_app.StatusComboDelegate = StatusComboDelegate
     legacy_app.CommentLineEditDelegate = CommentLineEditDelegate
     legacy_app.CompareImageCanvas = CompareImageCanvas
-    legacy_app.DrawingToolsDialog = DrawingToolsDialog
-    legacy_app.ScreenshotPreviewCanvas = ScreenshotPreviewCanvas
-    legacy_app.ScreenshotLibraryDialog = ScreenshotLibraryDialog
     legacy_app.OverlayNavButton = OverlayNavButton
     legacy_app.DetachedViewerWindow = DetachedViewerWindow
     legacy_app.WidgetPopupDialog = WidgetPopupDialog
-    legacy_app.StartupDialog = StartupDialog
+
+    install_one_shot_mode(legacy_app)
 
 
 def main() -> int:

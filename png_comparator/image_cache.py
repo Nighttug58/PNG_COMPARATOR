@@ -12,22 +12,22 @@ DEFAULT_PREVIEW_MAX_SIDE = 2200
 
 
 def image_cache_key(path: str, preview_max_side: int) -> str:
-    """Clé du cache mémoire, basée sur le chemin et la taille Preview max."""
     return f"{preview_max_side}::{path}"
 
 
 class ImageLoadSignals(QObject):
-    loaded = Signal(str, int, QImage, int, int)
-    failed = Signal(str, int, str)
+    loaded = Signal(str, int, int, QImage, int, int)
+    failed = Signal(str, int, int, str)
 
 
 class ImageLoadTask(QRunnable):
     """Worker de chargement image. Charge du QImage, jamais de QPixmap hors thread UI."""
 
-    def __init__(self, path: str, preview_max_side: int) -> None:
+    def __init__(self, path: str, preview_max_side: int, generation: int) -> None:
         super().__init__()
         self.path = path
         self.preview_max_side = int(preview_max_side)
+        self.generation = int(generation)
         self.signals = ImageLoadSignals()
         self.setAutoDelete(True)
 
@@ -47,6 +47,7 @@ class ImageLoadTask(QRunnable):
             self.signals.loaded.emit(
                 self.path,
                 self.preview_max_side,
+                self.generation,
                 image,
                 original_w,
                 original_h,
@@ -58,7 +59,7 @@ class ImageLoadTask(QRunnable):
         if not self._can_emit():
             return
         try:
-            self.signals.failed.emit(self.path, self.preview_max_side, error)
+            self.signals.failed.emit(self.path, self.preview_max_side, self.generation, error)
         except RuntimeError:
             return
 
@@ -78,11 +79,9 @@ class ImageLoadTask(QRunnable):
                 height = size.height()
                 if max(width, height) > max_side:
                     scale = max_side / float(max(width, height))
-                    scaled_size = QSize(
-                        max(1, int(width * scale)),
-                        max(1, int(height * scale)),
+                    reader.setScaledSize(
+                        QSize(max(1, int(width * scale)), max(1, int(height * scale)))
                     )
-                    reader.setScaledSize(scaled_size)
 
             image = reader.read()
             if image.isNull():
@@ -96,7 +95,7 @@ class ImageLoadTask(QRunnable):
 
 
 class ImageMemoryCache(QObject):
-    """Cache mémoire LRU + chargement asynchrone."""
+    """Cache mémoire LRU + chargement asynchrone versionné."""
 
     image_ready = Signal(str, QImage, int, int)
     image_failed = Signal(str, str)
@@ -112,8 +111,13 @@ class ImageMemoryCache(QObject):
         self.preview_cache: OrderedDict[str, Tuple[QImage, int, int]] = OrderedDict()
         self.pending: Set[str] = set()
         self.preview_limit = 18
+        self._generation = 0
         self.pool = QThreadPool.globalInstance()
         self.pool.setMaxThreadCount(max(2, min(4, self.pool.maxThreadCount())))
+
+    def _invalidate_inflight(self) -> None:
+        self._generation += 1
+        self.pending.clear()
 
     def set_preview_max_side(self, value: int) -> None:
         value = int(value)
@@ -121,17 +125,13 @@ class ImageMemoryCache(QObject):
             return
         self.preview_max_side = value
         self.preview_cache.clear()
+        self._invalidate_inflight()
         self.emit_cache_info()
 
     def clear(self) -> None:
-        """Vide le cache et invalide les workers déjà lancés.
-
-        Les QRunnable ne sont pas interrompus brutalement. Leur clé est toutefois
-        retirée de ``pending`` ; les callbacks tardifs sont donc ignorés dans
-        ``_on_loaded`` / ``_on_failed`` et ne peuvent pas repeupler le cache.
-        """
+        """Vide le cache et invalide toutes les réponses asynchrones antérieures."""
         self.preview_cache.clear()
-        self.pending.clear()
+        self._invalidate_inflight()
         self.emit_cache_info()
 
     def request(self, path: str) -> None:
@@ -152,25 +152,30 @@ class ImageMemoryCache(QObject):
             return
 
         self.pending.add(key)
-        task = ImageLoadTask(path=path, preview_max_side=self.preview_max_side)
+        task = ImageLoadTask(
+            path=path,
+            preview_max_side=self.preview_max_side,
+            generation=self._generation,
+        )
         task.signals.loaded.connect(self._on_loaded)
         task.signals.failed.connect(self._on_failed)
         self.pool.start(task)
         self.emit_cache_info()
 
-    @Slot(str, int, QImage, int, int)
+    @Slot(str, int, int, QImage, int, int)
     def _on_loaded(
         self,
         path: str,
         preview_max_side: int,
+        generation: int,
         image: QImage,
         original_w: int,
         original_h: int,
     ) -> None:
+        if generation != self._generation:
+            return
         key = image_cache_key(path, preview_max_side)
         if key not in self.pending:
-            # Worker obsolète : cache vidé ou requête invalidée depuis son départ.
-            self.emit_cache_info()
             return
         self.pending.discard(key)
 
@@ -185,11 +190,12 @@ class ImageMemoryCache(QObject):
         self.image_ready.emit(path, image, original_w, original_h)
         self.emit_cache_info()
 
-    @Slot(str, int, str)
-    def _on_failed(self, path: str, preview_max_side: int, error: str) -> None:
+    @Slot(str, int, int, str)
+    def _on_failed(self, path: str, preview_max_side: int, generation: int, error: str) -> None:
+        if generation != self._generation:
+            return
         key = image_cache_key(path, preview_max_side)
         if key not in self.pending:
-            self.emit_cache_info()
             return
         self.pending.discard(key)
         self.image_failed.emit(path, error)

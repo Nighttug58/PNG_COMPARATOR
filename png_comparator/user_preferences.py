@@ -16,6 +16,32 @@ from .shortcuts import portable_shortcut_text, shortcut_default_preferences
 PREFERENCES_SCHEMA = 1
 
 
+def _safe_int(value: Any, default: int, minimum: int | None = None, maximum: int | None = None) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        parsed = int(default)
+    if minimum is not None:
+        parsed = max(int(minimum), parsed)
+    if maximum is not None:
+        parsed = min(int(maximum), parsed)
+    return parsed
+
+
+def _safe_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "oui", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "non", "off", ""}:
+            return False
+    return bool(default)
+
+
 def _read_preferences() -> Dict[str, Any]:
     path = config.PREFERENCES_FILE
     if not path.exists():
@@ -24,7 +50,12 @@ def _read_preferences() -> Dict[str, Any]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    schema = _safe_int(data.get("schema", PREFERENCES_SCHEMA), -1)
+    if schema != PREFERENCES_SCHEMA:
+        return {}
+    return data
 
 
 def _write_preferences(data: Dict[str, Any]) -> None:
@@ -36,17 +67,12 @@ def _write_preferences(data: Dict[str, Any]) -> None:
 
 
 class UserPreferencesMainWindow(MultiFolderMainWindow):
-    """Visionneuse one-shot avec préférences locales au compte OS courant.
-
-    Ce fichier ne contient volontairement aucun état de session métier : pas de
-    statut, commentaire, scan sauvegardé, sélection de dossiers ni annotations.
-    """
+    """Visionneuse one-shot avec préférences locales au compte OS courant."""
 
     def __init__(self) -> None:
+        self._restore_maximized = True
         super().__init__()
 
-        # Autosave léger des seules préférences. Il est séparé de l'ancien
-        # autosave projet/session, qui reste désactivé en mode one-shot.
         self._preferences_save_timer = QTimer(self)
         self._preferences_save_timer.setSingleShot(True)
         self._preferences_save_timer.setInterval(900)
@@ -71,7 +97,6 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
             if signal is not None:
                 signal.connect(schedule_save)
 
-        # Les placeholders ne doivent contenir aucune référence ou chemin métier.
         if hasattr(self, "root_edit"):
             self.root_edit.setPlaceholderText("Choisir un dossier racine...")
         if hasattr(self, "refs_edit"):
@@ -107,11 +132,13 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
             "active_bg_index": int(getattr(self, "active_bg_index", 0)),
             "shortcuts": shortcuts,
             "main_window_geometry": geometry,
+            "main_window_maximized": bool(self.isMaximized()),
         }
 
     def load_state(self) -> None:
         data = _read_preferences()
         if not data:
+            self._restore_maximized = True
             if hasattr(self, "root_edit"):
                 self.root_edit.setText(config.DEFAULT_SOURCE_ROOT)
             if hasattr(self, "refs_edit"):
@@ -127,22 +154,37 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
             self.refs_edit.setPlainText(str(refs or ""))
 
         if hasattr(self, "chk_recursive_refs"):
-            self.chk_recursive_refs.setChecked(bool(data.get("recursive_refs", True)))
+            self.chk_recursive_refs.setChecked(_safe_bool(data.get("recursive_refs", True), True))
         if hasattr(self, "chk_main_only"):
-            self.chk_main_only.setChecked(bool(data.get("main_only", True)))
+            self.chk_main_only.setChecked(_safe_bool(data.get("main_only", True), True))
         if hasattr(self, "spin_expected_cams"):
-            value = int(data.get("expected_cams", 0) or 0)
-            self.spin_expected_cams.setValue(max(self.spin_expected_cams.minimum(), min(self.spin_expected_cams.maximum(), value)))
+            value = _safe_int(
+                data.get("expected_cams", 0),
+                0,
+                self.spin_expected_cams.minimum(),
+                self.spin_expected_cams.maximum(),
+            )
+            self.spin_expected_cams.setValue(value)
         if hasattr(self, "spin_preview_max"):
-            value = int(data.get("preview_max_side", config.DEFAULT_PREVIEW_MAX_SIDE) or config.DEFAULT_PREVIEW_MAX_SIDE)
-            self.spin_preview_max.setValue(max(self.spin_preview_max.minimum(), min(self.spin_preview_max.maximum(), value)))
+            value = _safe_int(
+                data.get("preview_max_side", config.DEFAULT_PREVIEW_MAX_SIDE),
+                config.DEFAULT_PREVIEW_MAX_SIDE,
+                self.spin_preview_max.minimum(),
+                self.spin_preview_max.maximum(),
+            )
+            self.spin_preview_max.setValue(value)
         if hasattr(self, "spin_preload_radius"):
-            value = int(data.get("preload_radius", config.DEFAULT_PRELOAD_RADIUS) or config.DEFAULT_PRELOAD_RADIUS)
-            self.spin_preload_radius.setValue(max(self.spin_preload_radius.minimum(), min(self.spin_preload_radius.maximum(), value)))
+            value = _safe_int(
+                data.get("preload_radius", config.DEFAULT_PRELOAD_RADIUS),
+                config.DEFAULT_PRELOAD_RADIUS,
+                self.spin_preload_radius.minimum(),
+                self.spin_preload_radius.maximum(),
+            )
+            self.spin_preload_radius.setValue(value)
         if hasattr(self, "chk_global_preload"):
-            self.chk_global_preload.setChecked(bool(data.get("global_preload", True)))
+            self.chk_global_preload.setChecked(_safe_bool(data.get("global_preload", True), True))
         if hasattr(self, "chk_global_preserve"):
-            self.chk_global_preserve.setChecked(bool(data.get("global_preserve", True)))
+            self.chk_global_preserve.setChecked(_safe_bool(data.get("global_preserve", True), True))
 
         colors = data.get("bg_colors")
         if isinstance(colors, list) and len(colors) == 3:
@@ -156,9 +198,10 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
                 self.bg_colors = parsed
             except Exception:
                 self.bg_colors = list(config.DEFAULT_BG_COLORS)
+        else:
+            self.bg_colors = list(config.DEFAULT_BG_COLORS)
 
-        active_bg_index = int(data.get("active_bg_index", 0) or 0)
-        self.active_bg_index = active_bg_index if 0 <= active_bg_index < len(self.bg_colors) else 0
+        self.active_bg_index = _safe_int(data.get("active_bg_index", 0), 0, 0, len(self.bg_colors) - 1)
 
         shortcut_data = data.get("shortcuts", {})
         if isinstance(shortcut_data, dict):
@@ -179,6 +222,7 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
                 self.restoreGeometry(QByteArray.fromHex(geometry.encode("ascii")))
             except Exception:
                 pass
+        self._restore_maximized = _safe_bool(data.get("main_window_maximized", True), True)
 
     def save_state(self, silent: bool = False) -> None:
         try:
@@ -216,6 +260,5 @@ class UserPreferencesMainWindow(MultiFolderMainWindow):
 
 
 def install_user_preferences_mode(app_module) -> None:
-    """Active multi-dossiers puis remplace l'état partagé par des préférences par utilisateur."""
     install_multi_folder_mode(app_module)
     app_module.MainWindow = UserPreferencesMainWindow

@@ -11,7 +11,7 @@ import png_comparator_v3_01_alpha_cleanup as legacy_app
 from png_comparator import config
 from png_comparator.image_cache import ImageMemoryCache
 from png_comparator.models import Annotation, DrawingItem, ImageRecord, ImageScanResult, ViewerState
-from png_comparator.one_shot import install_one_shot_mode
+from png_comparator.multi_folder import install_multi_folder_mode
 from png_comparator.scanner import ImageScanner, extract_tags
 from png_comparator.shortcuts import (
     SHORTCUT_ALIASES,
@@ -53,7 +53,7 @@ from png_comparator.utils import (
 
 
 def install_modular_components() -> None:
-    """Branche le noyau modulaire puis active la visionneuse one-shot."""
+    """Branche le noyau modulaire puis active la visionneuse one-shot multi-dossiers."""
 
     legacy_app.APP_NAME = config.APP_NAME
     legacy_app.CHECKBOX_VISUAL_STYLE = config.CHECKBOX_VISUAL_STYLE
@@ -112,7 +112,7 @@ def install_modular_components() -> None:
     legacy_app.DetachedViewerWindow = DetachedViewerWindow
     legacy_app.WidgetPopupDialog = WidgetPopupDialog
 
-    install_one_shot_mode(legacy_app)
+    install_multi_folder_mode(legacy_app)
 
 
 def main() -> int:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 import png_comparator_v3_01_alpha_cleanup as legacy_app
@@ -119,12 +120,19 @@ def install_modular_components() -> None:
 def main() -> int:
     install_modular_components()
 
+    # Les QFileDialog natifs suivent le thème Windows. Pour garantir le sombre
+    # même sur un poste configuré en clair, on utilise les dialogues Qt stylables.
+    QApplication.setAttribute(Qt.AA_DontUseNativeDialogs, True)
+
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
     apply_application_dark_theme(app)
 
     window = legacy_app.MainWindow()
-    window.showMaximized()
+    if bool(getattr(window, "_restore_maximized", True)):
+        window.showMaximized()
+    else:
+        window.show()
     apply_windows_dark_titlebar(window)
     return app.exec()
 

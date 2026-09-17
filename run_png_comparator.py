@@ -1,17 +1,16 @@
-"""Point d'entrée transitoire de la version modulaire one-shot de PNG Comparator.
-
-L'interface historique reste temporairement disponible comme socle, mais les
-composants déjà extraits et le mode visionneuse pure sont injectés avant démarrage.
-"""
+"""Point d'entrée modulaire de PNG Comparator en mode visionneuse one-shot."""
 
 from __future__ import annotations
+
+import sys
+
+from PySide6.QtWidgets import QApplication
 
 import png_comparator_v3_01_alpha_cleanup as legacy_app
 
 from png_comparator import config
 from png_comparator.image_cache import ImageMemoryCache
 from png_comparator.models import Annotation, DrawingItem, ImageRecord, ImageScanResult, ViewerState
-from png_comparator.multi_folder import install_multi_folder_mode
 from png_comparator.scanner import ImageScanner, extract_tags
 from png_comparator.shortcuts import (
     SHORTCUT_ALIASES,
@@ -28,6 +27,7 @@ from png_comparator.status import (
     normalize_status,
     status_text_color,
 )
+from png_comparator.theme import apply_application_dark_theme, apply_windows_dark_titlebar
 from png_comparator.ui.color_button import ColorButton
 from png_comparator.ui.overlay_nav import OverlayNavButton
 from png_comparator.ui.table_delegates import (
@@ -37,6 +37,7 @@ from png_comparator.ui.table_delegates import (
 )
 from png_comparator.ui.viewer import CompareImageCanvas
 from png_comparator.ui.windows import DetachedViewerWindow, WidgetPopupDialog
+from png_comparator.user_preferences import install_user_preferences_mode
 from png_comparator.utils import (
     canonical_image_key,
     color_to_tuple,
@@ -53,10 +54,10 @@ from png_comparator.utils import (
 
 
 def install_modular_components() -> None:
-    """Branche le noyau modulaire puis active la visionneuse one-shot multi-dossiers."""
+    """Branche le noyau modulaire, multi-dossiers et préférences utilisateur."""
 
     legacy_app.APP_NAME = config.APP_NAME
-    legacy_app.CHECKBOX_VISUAL_STYLE = config.CHECKBOX_VISUAL_STYLE
+    legacy_app.CHECKBOX_VISUAL_STYLE = ""
     legacy_app.APP_INSTALL_DIR = config.APP_INSTALL_DIR
     legacy_app.APP_ROOT_DIR = config.APP_ROOT_DIR
     legacy_app.STATE_FILE = config.STATE_FILE
@@ -112,12 +113,20 @@ def install_modular_components() -> None:
     legacy_app.DetachedViewerWindow = DetachedViewerWindow
     legacy_app.WidgetPopupDialog = WidgetPopupDialog
 
-    install_multi_folder_mode(legacy_app)
+    install_user_preferences_mode(legacy_app)
 
 
 def main() -> int:
     install_modular_components()
-    return legacy_app.main()
+
+    app = QApplication(sys.argv)
+    app.setApplicationName(config.APP_NAME)
+    apply_application_dark_theme(app)
+
+    window = legacy_app.MainWindow()
+    window.showMaximized()
+    apply_windows_dark_titlebar(window)
+    return app.exec()
 
 
 if __name__ == "__main__":
